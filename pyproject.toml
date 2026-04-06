@@ -1,0 +1,21 @@
+[project]
+name = "thirteen-f-scrape"
+version = "0.1.0"
+description = "SEC EDGAR 13F filings scraper + dashboard"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "edgartools",
+    "duckdb",
+    "httpx",
+]
+
+[project.optional-dependencies]
+pipeline = [
+    "dagster",
+    "dagster-webserver",
+    "dagster-duckdb",
+]
+dashboard = [
+    # Evidence is Node-based, installed separately
+]
