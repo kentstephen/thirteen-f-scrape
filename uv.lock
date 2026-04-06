@@ -1126,6 +1126,7 @@ source = { editable = "." }
 dependencies = [
     { name = "duckdb" },
     { name = "httpx" },
+    { name = "tqdm" },
 ]
 
 [package.optional-dependencies]
@@ -1142,6 +1143,7 @@ requires-dist = [
     { name = "dagster-webserver", marker = "extra == 'pipeline'" },
     { name = "duckdb" },
     { name = "httpx" },
+    { name = "tqdm", specifier = ">=4.67.3" },
 ]
 provides-extras = ["pipeline"]
 

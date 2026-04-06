@@ -12,6 +12,16 @@ def get_connection(path: str = DB_PATH) -> duckdb.DuckDBPyConnection:
 
 
 def _ensure_schema(con: duckdb.DuckDBPyConnection):
+    # Lookup table: our friendly names keyed by CIK
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS funds (
+            cik VARCHAR PRIMARY KEY,
+            display_name VARCHAR NOT NULL,
+            category VARCHAR
+        )
+    """)
+
+    # Raw holdings from EDGAR
     con.execute("""
         CREATE TABLE IF NOT EXISTS holdings (
             cik VARCHAR,
@@ -30,20 +40,22 @@ def _ensure_schema(con: duckdb.DuckDBPyConnection):
         )
     """)
 
+    # Aggregated holdings joined with our fund names
     con.execute("""
-        CREATE VIEW IF NOT EXISTS holdings_aggregated AS
+        CREATE OR REPLACE VIEW holdings_aggregated AS
         SELECT
-            cik,
-            entity_name,
-            filing_date,
-            report_date,
-            issuer,
-            cusip,
-            SUM(value_x1000) as value_x1000,
-            SUM(shares) as shares,
-            put_call
-        FROM holdings
-        GROUP BY cik, entity_name, filing_date, report_date, issuer, cusip, put_call
+            h.cik,
+            COALESCE(f.display_name, h.entity_name) as fund,
+            h.filing_date,
+            h.report_date,
+            h.issuer,
+            h.cusip,
+            SUM(h.value_x1000) as value_x1000,
+            SUM(h.shares) as shares,
+            h.put_call
+        FROM holdings h
+        LEFT JOIN funds f ON h.cik = f.cik
+        GROUP BY h.cik, f.display_name, h.entity_name, h.filing_date, h.report_date, h.issuer, h.cusip, h.put_call
     """)
 
     con.execute("""
@@ -60,7 +72,7 @@ def _ensure_schema(con: duckdb.DuckDBPyConnection):
         prior_q AS (SELECT * FROM ranked WHERE rn = 2)
         SELECT
             c.cik,
-            c.entity_name,
+            c.fund,
             c.report_date as current_report_date,
             p.report_date as prior_report_date,
             c.issuer,
@@ -88,7 +100,6 @@ def _ensure_schema(con: duckdb.DuckDBPyConnection):
             AND COALESCE(c.put_call, '') = COALESCE(p.put_call, '')
     """)
 
-    # Detect positions that were exited (in prior but not in current)
     con.execute("""
         CREATE OR REPLACE VIEW exited_positions AS
         WITH ranked AS (
@@ -103,7 +114,7 @@ def _ensure_schema(con: duckdb.DuckDBPyConnection):
         prior_q AS (SELECT * FROM ranked WHERE rn = 2)
         SELECT
             p.cik,
-            p.entity_name,
+            p.fund,
             p.report_date as last_held_date,
             c.report_date as current_report_date,
             p.issuer,
@@ -120,6 +131,24 @@ def _ensure_schema(con: duckdb.DuckDBPyConnection):
     """)
 
 
+def sync_fund_names(con: duckdb.DuckDBPyConnection, funds: dict[str, str]):
+    """Sync our friendly fund names into the funds table."""
+    for display_name, cik in funds.items():
+        con.execute(
+            "INSERT OR REPLACE INTO funds (cik, display_name) VALUES (?, ?)",
+            [cik.lstrip("0"), display_name],
+        )
+
+
+def fund_has_quarters(con: duckdb.DuckDBPyConnection, cik: str, needed: int = 4) -> bool:
+    """Check if we already have enough quarters for this fund."""
+    result = con.execute(
+        "SELECT COUNT(DISTINCT report_date) FROM holdings WHERE cik = ?",
+        [cik.lstrip("0")],
+    ).fetchone()
+    return result is not None and result[0] >= needed
+
+
 def filing_exists(con: duckdb.DuckDBPyConnection, accession_number: str) -> bool:
     result = con.execute(
         "SELECT 1 FROM holdings WHERE accession_number = ? LIMIT 1",
@@ -133,23 +162,26 @@ def insert_holdings(
     filing: dict,
     holdings: list[dict],
 ):
-    for h in holdings:
-        con.execute(
-            """
-            INSERT OR IGNORE INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                filing["cik"],
-                filing["entity_name"],
-                filing["accession_number"],
-                filing["filing_date"],
-                filing.get("report_date"),
-                h["issuer"],
-                h["title_of_class"],
-                h["cusip"],
-                h["value_x1000"],
-                h["shares"],
-                h["share_type"],
-                h["put_call"],
-            ],
+    if not holdings:
+        return
+    rows = [
+        (
+            filing["cik"],
+            filing["entity_name"],
+            filing["accession_number"],
+            filing["filing_date"],
+            filing.get("report_date"),
+            h["issuer"],
+            h["title_of_class"],
+            h["cusip"],
+            h["value_x1000"],
+            h["shares"],
+            h["share_type"],
+            h["put_call"],
         )
+        for h in holdings
+    ]
+    con.executemany(
+        "INSERT OR IGNORE INTO holdings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )

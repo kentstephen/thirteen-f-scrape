@@ -1,0 +1,4 @@
+name: thirteenf
+type: duckdb
+options:
+  filename: ../thirteen_f.duckdb

@@ -1,6 +1,6 @@
-"""SEC EDGAR API client for 13F filings."""
+"""SEC EDGAR API client for 13F filings. Async with rate limiting."""
 
-import time
+import asyncio
 import xml.etree.ElementTree as ET
 
 import httpx
@@ -10,28 +10,46 @@ SEC_BASE = "https://data.sec.gov"
 ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
 NS = {"ns": "http://www.sec.gov/edgar/document/thirteenf/informationtable"}
 
-# SEC fair-use: max 10 req/sec, we stay conservative
-_last_request_time = 0.0
-MIN_REQUEST_INTERVAL = 0.15  # ~6.6 req/sec
+# SEC fair-use: max 10 req/sec. Semaphore limits concurrency,
+# small sleep between requests keeps us under the limit.
+MAX_CONCURRENT = 8
+REQUEST_DELAY = 0.12  # ~8 req/sec effective
+
+_semaphore: asyncio.Semaphore | None = None
+_client: httpx.AsyncClient | None = None
 
 
-def _throttled_get(url: str, timeout: int = 30) -> httpx.Response:
-    """Make a GET request with rate limiting for SEC compliance."""
-    global _last_request_time
-    elapsed = time.monotonic() - _last_request_time
-    if elapsed < MIN_REQUEST_INTERVAL:
-        time.sleep(MIN_REQUEST_INTERVAL - elapsed)
-    _last_request_time = time.monotonic()
-    resp = httpx.get(url, headers=HEADERS, timeout=timeout)
-    resp.raise_for_status()
-    return resp
+async def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(headers=HEADERS, timeout=60)
+    return _client
 
 
-def get_13f_filings(cik: str, limit: int = 10) -> list[dict]:
+async def _get_semaphore() -> asyncio.Semaphore:
+    global _semaphore
+    if _semaphore is None:
+        _semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+    return _semaphore
+
+
+async def _throttled_get(url: str) -> httpx.Response:
+    """Rate-limited async GET."""
+    sem = await _get_semaphore()
+    client = await _get_client()
+    async with sem:
+        await asyncio.sleep(REQUEST_DELAY)
+        resp = await client.get(url)
+        resp.raise_for_status()
+        return resp
+
+
+async def get_13f_filings(cik: str, limit: int = 10) -> list[dict]:
     """Get recent 13F-HR filings for a CIK from the submissions API."""
     padded = cik.lstrip("0").zfill(10)
     url = f"{SEC_BASE}/submissions/CIK{padded}.json"
-    data = _throttled_get(url).json()
+    resp = await _throttled_get(url)
+    data = resp.json()
 
     recent = data["filings"]["recent"]
     filings = []
@@ -50,12 +68,13 @@ def get_13f_filings(cik: str, limit: int = 10) -> list[dict]:
     return filings
 
 
-def find_info_table_url(cik: str, accession: str) -> str | None:
+async def find_info_table_url(cik: str, accession: str) -> str | None:
     """Find the informationTable XML URL from a filing's index."""
     cik_num = cik.lstrip("0")
     acc_no_dashes = accession.replace("-", "")
     index_url = f"{ARCHIVES_BASE}/{cik_num}/{acc_no_dashes}/index.json"
-    data = _throttled_get(index_url).json()
+    resp = await _throttled_get(index_url)
+    data = resp.json()
 
     for item in data.get("directory", {}).get("item", []):
         name = item.get("name", "").lower()
@@ -64,13 +83,21 @@ def find_info_table_url(cik: str, accession: str) -> str | None:
     return None
 
 
-def fetch_holdings(cik: str, accession: str) -> list[dict]:
+async def fetch_holdings(cik: str, accession: str) -> list[dict]:
     """Fetch and parse the informationTable XML for a filing."""
-    url = find_info_table_url(cik, accession)
+    url = await find_info_table_url(cik, accession)
     if not url:
         return []
-    resp = _throttled_get(url, timeout=60)
+    resp = await _throttled_get(url)
     return _parse_info_table(resp.text)
+
+
+async def close():
+    """Close the async client."""
+    global _client
+    if _client and not _client.is_closed:
+        await _client.aclose()
+        _client = None
 
 
 def _parse_info_table(xml_text: str) -> list[dict]:
