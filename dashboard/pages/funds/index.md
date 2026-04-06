@@ -5,6 +5,7 @@ title: All Funds
 ```sql funds
 SELECT
     fund,
+    cik,
     report_date,
     total_value_m,
     positions
@@ -32,7 +33,7 @@ ORDER BY fund, report_date
 ## All Funds (Latest Filing)
 
 ```sql latest_per_fund
-SELECT fund, report_date, total_value_m, positions
+SELECT fund, cik, report_date, total_value_m, positions
 FROM thirteenf.fund_summary
 WHERE (fund, report_date) IN (
     SELECT fund, MAX(report_date) FROM thirteenf.fund_summary GROUP BY fund
@@ -40,7 +41,7 @@ WHERE (fund, report_date) IN (
 ORDER BY total_value_m DESC
 ```
 
-<DataTable data={latest_per_fund} search=true link=fund>
+<DataTable data={latest_per_fund} search=true link=cik>
     <Column id=fund title="Fund" />
     <Column id=total_value_m title="AUM ($M)" fmt="$#,##0" />
     <Column id=positions title="Positions" />

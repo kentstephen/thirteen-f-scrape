@@ -1,18 +1,20 @@
 ---
-title: "{params.fund}"
+title: Fund Detail
 ---
 
 ```sql fund_info
-SELECT fund, report_date, total_value_m, positions
+SELECT fund, cik, report_date, total_value_m, positions
 FROM thirteenf.fund_summary
-WHERE fund = '${params.fund}'
+WHERE cik = '${params.cik}'
 ORDER BY report_date DESC
 ```
+
+# {fund_info[0].fund}
 
 ```sql holdings
 SELECT issuer, cusip, value_m, shares, put_call
 FROM thirteenf.latest_holdings
-WHERE fund = '${params.fund}'
+WHERE cik = '${params.cik}'
 ORDER BY value_m DESC
 ```
 
@@ -20,7 +22,7 @@ ORDER BY value_m DESC
 SELECT issuer, change_type, current_value_m, prior_value_m, value_change_m,
        current_shares, prior_shares, shares_change, pct_change
 FROM thirteenf.position_changes
-WHERE fund = '${params.fund}'
+WHERE cik = '${params.cik}'
   AND change_type != 'UNCHANGED'
 ORDER BY ABS(value_change_m) DESC
 ```
@@ -28,7 +30,7 @@ ORDER BY ABS(value_change_m) DESC
 ```sql aum_trend
 SELECT report_date, total_value_m, positions
 FROM thirteenf.fund_summary
-WHERE fund = '${params.fund}'
+WHERE cik = '${params.cik}'
 ORDER BY report_date
 ```
 
