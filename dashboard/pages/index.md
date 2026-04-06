@@ -2,7 +2,7 @@
 title: 13F Filings Dashboard
 ---
 
-Large institutional investment managers with over $100M in assets are required to file <a href="https://www.sec.gov/divisions/investment/13ffaq" target="_blank">Form 13F</a> with the SEC each quarter, disclosing their equity holdings. This dashboard tracks those filings to show what the biggest hedge funds are buying and selling.
+Large institutional investment managers with over $100M in Assets Under Management (AUM) are required to file <a href="https://www.sec.gov/divisions/investment/13ffaq" target="_blank">Form 13F</a> with the SEC each quarter, disclosing their equity holdings. This dashboard tracks those filings to show what the biggest hedge funds are buying and selling.
 
 ```sql quarters
 SELECT DISTINCT report_date
@@ -10,8 +10,19 @@ FROM thirteenf.fund_summary
 ORDER BY report_date DESC
 ```
 
+```sql fund_count
+SELECT COUNT(DISTINCT fund) as n
+FROM thirteenf.fund_summary
+```
+
 <Dropdown data={quarters} name=quarter value=report_date title="Filing Quarter">
     <DropdownOption value="%" valueLabel="All Quarters" />
+</Dropdown>
+
+<Dropdown name=show_count title="Show Top N Funds (by AUM)">
+    <DropdownOption value="10" valueLabel="Top 10" />
+    <DropdownOption value="25" valueLabel="Top 25" default />
+    <DropdownOption value="50" valueLabel="All Funds" />
 </Dropdown>
 
 ```sql fund_aum
@@ -24,6 +35,7 @@ FROM thirteenf.fund_summary s
 WHERE s.report_date = (SELECT MAX(report_date) FROM thirteenf.fund_summary WHERE fund = s.fund)
 AND CAST(s.report_date AS VARCHAR) like '${inputs.quarter.value}'
 ORDER BY s.total_value_m DESC
+LIMIT ${inputs.show_count.value}
 ```
 
 ## Portfolio Size by Fund
