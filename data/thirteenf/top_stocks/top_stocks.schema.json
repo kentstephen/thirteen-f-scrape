@@ -1,0 +1,1 @@
+[{"name":"issuer","evidenceType":"string","typeFidelity":"precise"},{"name":"cusip","evidenceType":"string","typeFidelity":"precise"},{"name":"num_funds","evidenceType":"number","typeFidelity":"precise"},{"name":"total_value_m","evidenceType":"number","typeFidelity":"precise"},{"name":"total_shares","evidenceType":"number","typeFidelity":"precise"}]
