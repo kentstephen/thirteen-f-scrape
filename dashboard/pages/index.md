@@ -101,7 +101,7 @@ LIMIT 20
 Existing positions where funds added significantly more shares.
 
 ```sql biggest_increases
-SELECT fund, issuer, pct_change, value_change_m, current_value_m
+SELECT fund, issuer, pct_change, value_change_m, current_value_m, current_quarter, prior_quarter
 FROM thirteenf.position_changes
 WHERE change_type = 'INCREASED' AND pct_change IS NOT NULL
 AND fund IN (SELECT fund FROM ${fund_aum})
@@ -129,6 +129,8 @@ LIMIT 20
     <Column id=pct_change title="% Change" fmt="+0.0" />
     <Column id=value_change_m title="Value Added ($M)" fmt="+#,##0" />
     <Column id=current_value_m title="Current Value ($M)" fmt="#,##0" />
+    <Column id=prior_quarter title="Prior Quarter" />
+    <Column id=current_quarter title="Current Quarter" />
 </DataTable>
 
 ---
@@ -138,7 +140,7 @@ LIMIT 20
 Positions where funds are selling — trimming or reducing their holdings.
 
 ```sql biggest_decreases
-SELECT fund, issuer, pct_change, value_change_m * -1 as value_sold_m, current_value_m
+SELECT fund, issuer, pct_change, value_change_m * -1 as value_sold_m, current_value_m, current_quarter, prior_quarter
 FROM thirteenf.position_changes
 WHERE change_type = 'DECREASED'
 AND fund IN (SELECT fund FROM ${fund_aum})
@@ -166,6 +168,8 @@ LIMIT 20
     <Column id=pct_change title="% Change" fmt="0.0" />
     <Column id=value_sold_m title="Value Sold ($M)" fmt="#,##0" />
     <Column id=current_value_m title="Remaining Value ($M)" fmt="#,##0" />
+    <Column id=prior_quarter title="Prior Quarter" />
+    <Column id=current_quarter title="Current Quarter" />
 </DataTable>
 
 ---

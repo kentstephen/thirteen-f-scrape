@@ -1,14 +1,30 @@
 # 13F Scrape
 
-SEC EDGAR 13F filings scraper and dashboard. Track what major hedge funds are buying and selling.
+SEC EDGAR 13F filings scraper and dashboard. Tracks what major hedge funds are buying and selling each quarter.
 
-## Stack (Planned)
+## Stack
 
-- **Scraping**: TBD (Scrapy, BeautifulSoup, or direct EDGAR API)
-- **Orchestration**: Dagster
+- **Data**: Python async fetcher pulling from SEC EDGAR API
 - **Storage**: DuckDB
-- **Dashboard**: Evidence (BI as code)
+- **Dashboard**: Evidence (BI as code) — static site deployed to GitHub Pages
+- **Orchestration**: Dagster (coming soon)
 
-## Status
+## What It Does
 
-Research & planning phase. See `docs/RESEARCH_PLAN.md` for details.
+- Fetches 13F filings for 50 large institutional managers
+- Computes quarter-over-quarter position changes (new buys, increases, decreases)
+- Landing page with AUM chart, biggest moves, and most widely held stocks
+- Per-fund detail pages with holdings and position change breakdowns
+
+## Running Locally
+
+```bash
+# Fetch data from SEC EDGAR
+uv run thirteenf-fetch
+
+# Run the dashboard
+cd dashboard
+npm install
+npm run sources
+npm run dev
+```
